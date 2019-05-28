@@ -11,27 +11,27 @@ import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.TableFunction;
 import net.sf.jsqlparser.util.TablesNamesFinder;
 
-import java.io.FileNotFoundException;
 import java.util.*;
 
 public class ParseFunction {
-    static List<String> tableNames = new ArrayList<>();//LinkedList<>();
-    static List<String> linkedNames = new ArrayList<>();
-    static Map<String, List<String>> m = new HashMap<>();
-    static Map<String, List<String>> stringListTreeMapTables = new TreeMap<String, List<String>>();
-    static List<String> lineageTables = new ArrayList<>();
+    private static List<String> tableNames = new ArrayList<>();//LinkedList<>();
+    private static List<String> linkedNames = new ArrayList<>();
+    private static Map<String, List<String>> m = new HashMap<>();
+    private static Map<String, List<String>> stringListTreeMapTables = new TreeMap<>();
+    private static List<String> lineageTables = new ArrayList<>();
 
-    public static void main(String[] args) throws JSQLParserException, FileNotFoundException {
+    public static void main(String[] args) throws JSQLParserException {
         basicMain();
 
     }
 
     public static String basicMain() throws JSQLParserException {
-        Statements statements = null;
+        Statements statements;
         String sqlFile = "D:\\Users\\Rajesh\\Desktop\\SampleSQL.txt";
 
         SQLFileReader sqlFileReader = SQLFileReader.getInstance();
-        String test = sqlFileReader.fileToString(sqlFile).toLowerCase();
+        String test;
+        test = SQLFileReader.fileToString(sqlFile).toLowerCase();
 
         statements = CCJSqlParserUtil.parseStatements(test);
         //DdlProperty ddlProperty = new DdlProperty();
@@ -54,7 +54,7 @@ public class ParseFunction {
         return linkedNames.toString();
     }
 
-    public static void findTableFromView(int iteration, Statement statement) throws JSQLParserException {
+    private static void findTableFromView(int iteration, Statement statement) {
         CreateView createView1 = (CreateView) statement;
         TablesNamesFinderExt tablesNamesFinder = new TablesNamesFinderExt();
         Select select = createView1.getSelect();
@@ -64,9 +64,8 @@ public class ParseFunction {
     }
 
     static public void processLineage(Map<String, List<String>> tableMap) {
-        List<String> createTables = new ArrayList<>();
-
-        createTables.addAll(tableMap.keySet());
+        List<String> orderFixedTableList = new ArrayList<>();
+        List<String> createTables = new ArrayList<>(tableMap.keySet());
 
         System.out.println("createTables->" + createTables.toString());
         int i = 0;
@@ -102,20 +101,29 @@ public class ParseFunction {
                     int baseTableIndex = lineageTables.indexOf(baseTable);
                     System.out.println("ind->" + ind + ", createViewIndex->" + createViewIndex + ", baseTableIndex" +
                             "->" + baseTableIndex);
-
                     System.out.println("BEFORE swap of linkedNames (" + i + ")->" + lineageTables.toString());
-                    Collections.swap(lineageTables, createViewIndex, baseTableIndex);
+                    // if first time, no need to check in orderFixedTableList
+                    if (i == 0) {
+                        Collections.swap(lineageTables, createViewIndex, baseTableIndex);
+                        //orderFixedTableList.addAll(lineageTables);
+                    } else {
+                        // if not first time, check orderFixedTableList, already in sorted/swaped or not.
+
+                        if (lineageTables.indexOf(f_viewName) < lineageTables.indexOf(baseTable)) {
+                            Collections.swap(lineageTables, createViewIndex, baseTableIndex);
+                        }
+                    }
+
                     System.out.println("AFTER swap of linkedNames (" + i + ")->" + lineageTables.toString());
                 }
             }
-
             //}
             System.out.println("\n");
             i = i + 1;
         }
     }
 
-    public static void findTableFromView1(int iteration, Statement statement) throws JSQLParserException {
+    public static void findTableFromView1(int iteration, Statement statement) {
         CreateView createView1 = (CreateView) statement;
         System.out.println("VIEW:\t" + createView1.isOrReplace());
         Select select = createView1.getSelect();
@@ -132,8 +140,7 @@ public class ParseFunction {
             linkedNames.addAll(tablesNamesFinder.getTableList(select));
             linkedNames.add(createView1.getView().getName());
         } else {
-            List<String> tempList = new ArrayList<>();
-            tempList.addAll(tablesNamesFinder.getTableList(select));
+            List<String> tempList = new ArrayList<>(tablesNamesFinder.getTableList(select));
             tempList.add(createView1.getView().getName());
             int[] linkedNamesIndex = new int[tempList.size()];
 
@@ -163,10 +170,7 @@ public class ParseFunction {
                     }
                 }
             }
-
         }
-
-
     }
 
     static class TablesNamesFinderExt extends TablesNamesFinder {

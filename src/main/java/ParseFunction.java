@@ -27,7 +27,7 @@ public class ParseFunction {
 
     public static String basicMain() throws JSQLParserException {
         Statements statements;
-        String sqlFile = "D:\\Users\\Rajesh\\Desktop\\SampleSQL.txt";
+        String sqlFile = "src/main/resources/SampleSQL.txt";
 
         SQLFileReader sqlFileReader = SQLFileReader.getInstance();
         String test;

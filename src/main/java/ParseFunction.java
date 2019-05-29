@@ -1,3 +1,4 @@
+/*
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.operators.relational.Between;
@@ -69,11 +70,13 @@ public class ParseFunction {
 
         System.out.println("createTables->" + createTables.toString());
         int i = 0;
+*/
 /*        for (Entry<String, List<Integer>> ee : map.entrySet()) {
             String key = ee.getKey();
             List<Integer> values = ee.getValue();
 
-        }*/
+        }*//*
+
         String createViewTableName, createViewBaseTableName;
         for (String f_viewName : tableMap.keySet()) {
             createViewTableName = f_viewName;
@@ -181,11 +184,13 @@ public class ParseFunction {
 //                System.out.println("column = " + tableColumn);
 //            }
 
-        /**
-         * Helps to find user or system functions from statement
-         *
-         * @param function
-         */
+        */
+/**
+ * Helps to find user or system functions from statement
+ *
+ * @param function
+ *//*
+
         @Override
         public void visit(Function function) {
             ExpressionList exprList = function.getParameters();
@@ -223,3 +228,4 @@ public class ParseFunction {
     }
 
 }
+*/

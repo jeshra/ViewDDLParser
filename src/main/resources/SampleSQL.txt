@@ -1,7 +1,7 @@
 
 CREATE VIEW vEmployee5 as 
 	SELECT *
-	FROM vEmployee4, vEmployee2, vEmployee3
+	FROM vEmployee4, vEmployee3
 	Where d=s;
 
 CREATE VIEW vEmployee6 as 

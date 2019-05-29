@@ -11,20 +11,24 @@ import net.sf.jsqlparser.statement.select.SelectBody;
 import net.sf.jsqlparser.statement.select.TableFunction;
 import net.sf.jsqlparser.util.TablesNamesFinder;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
-public class ParseFunction {
+public class DDLLineageTracker {
+    static int i = 0;
     private static List<String> linkedNames = new ArrayList<>();
     private static Map<String, List<String>> stringListTreeMapTables = new TreeMap<>();
     private static List<String> LineageCreateTableList = new ArrayList<>();
     private static List<String> NonLineageCreateTableList = new ArrayList<>();
     //System.out.println("NonLineageCreateTableList->" + NonLineageCreateTableList.toString());
+    private static StringBuilder stringBuilder = new StringBuilder();
 
     public static void main(String[] args) throws JSQLParserException {
         basicMain();
 
     }
-
 
     private static void basicMain() throws JSQLParserException {
         Statements statements;
@@ -41,9 +45,23 @@ public class ParseFunction {
         System.out.println("stringListTreeMapTables.toString():" + stringListTreeMapTables.toString());
         NonLineageCreateTableList.addAll(stringListTreeMapTables.keySet());
         //processLineage(stringListTreeMapTables);
-        for (String Table : NonLineageCreateTableList)
+        for (String Table : NonLineageCreateTableList) {
+            System.out.println("Processing Create view: " + Table);
             processLineage2(Table, stringListTreeMapTables);
+        }
         System.out.println("LineageCreateTableList->" + LineageCreateTableList.toString());
+        /**
+         * Example Input
+         * vemployee2=[vemployee5],
+         * vemployee4=[vemployee3],
+         * vemployee5=[vemployee4, vemployee3],
+         * vemployee6=[vemployee4, vemployee3],
+         * vemployee7=[vemployee8, vemployee5],
+         * vemployee8=[vemployee9]
+         *
+         * Expected Output: LineageCreateTableList->[vemployee4, vemployee5, vemployee2, vemployee6, vemployee8, vemployee7]
+         */
+
         linkedNames.toString();
     }
 
@@ -55,23 +73,29 @@ public class ParseFunction {
         stringListTreeMapTables.put(createView.getView().getName(), tablesNamesFinder.getTableList(s1));
     }
 
-
-    static int i = 0;
-
     private static void processLineage2(String Table, Map<String, List<String>> tableMap) {
         /*if (i == 0) {
             LineageCreateTableList.add(Table);
         }*/
         //System.out.println("NonLineageCreateTableList.toString():" + NonLineageCreateTableList.toString());
-        System.out.println("Table:" + Table);
+
+
         if ((NonLineageCreateTableList.indexOf(Table)) != -1) {
-            System.out.println("Table inside if:" + Table);
+            System.out.println(Table + ": Table is A create view");
+
             List<String> baseTableList = tableMap.get(Table);
-            System.out.println("List<String> baseTableList: " + baseTableList);
+            //System.out.println("List<String> baseTableList: " + baseTableList);
+
+
             for (String baseTable : baseTableList) {
+                stringBuilder.append(baseTable).append("->");
                 processLineage2(baseTable, tableMap);
             }
-        }
+            if (LineageCreateTableList.indexOf(Table) == -1) LineageCreateTableList.add(Table);
+            stringBuilder.append(Table).append("#");
+            System.out.println(stringBuilder.toString());
+        } else System.out.println(Table + ": Table is NOT A create view");
+
         /*if ((NonLineageCreateTableList.indexOf(Table)) != -1) {
 
         }
@@ -85,64 +109,6 @@ public class ParseFunction {
 
             }
         }*/
-    }
-
-    private static void processLineage(Map<String, List<String>> tableMap) {
-        List<String> NonLineageCreateTableList = new ArrayList<>(tableMap.keySet());
-        System.out.println("NonLineageCreateTableList->" + NonLineageCreateTableList.toString());
-        int i = 0;
-/*        for (Entry<String, List<Integer>> ee : map.entrySet()) {
-            String key = ee.getKey();
-            List<Integer> values = ee.getValue();
-        }*/
-        String createViewTableName;
-        for (String f_viewName : tableMap.keySet()) {
-            createViewTableName = f_viewName;
-            if (i == 0) {
-                LineageCreateTableList.add(f_viewName);
-            } else if (LineageCreateTableList.indexOf(createViewTableName) == -1)
-                LineageCreateTableList.add(createViewTableName);
-            System.out.println(">>>LineageCreateTableList.toString()->" + LineageCreateTableList.toString());
-
-
-            List<String> baseTableList = tableMap.get(f_viewName);
-            System.out.println("tableMap.get(" + f_viewName + ")->" + baseTableList.toString());
-            int ind;
-            for (String baseTable : baseTableList) {
-                System.out.println("forLoop of baseTable: " + baseTable);
-                if ((ind = NonLineageCreateTableList.indexOf(baseTable)) != -1) {
-                    int createViewIndex;
-                    System.out.println("BBEFORE LineageCreateTableList add:" + LineageCreateTableList.toString());
-                    if (LineageCreateTableList.indexOf(baseTable) == -1)
-                        LineageCreateTableList.add(baseTable);
-
-
-                    createViewIndex = LineageCreateTableList.indexOf(f_viewName);
-                    System.out.println("AAFTER LineageCreateTableList add:" + LineageCreateTableList.toString());
-                    //TODO: recursive function call as like in Scala
-                    int baseTableIndex = LineageCreateTableList.indexOf(baseTable);
-                    System.out.println("ind->" + ind + ", createViewIndex->" + createViewIndex + ", baseTableIndex" +
-                            "->" + baseTableIndex);
-                    System.out.println("BEFORE swap of linkedNames (" + i + ")->" + LineageCreateTableList.toString());
-                    // if first time, no need to check in orderFixedTableList
-                    if (i == 0) {
-                        Collections.swap(LineageCreateTableList, createViewIndex, baseTableIndex);
-                        //orderFixedTableList.addAll(LineageCreateTableList);
-                    } else {
-                        // if not first time, check orderFixedTableList, already in sorted/swaped or not.
-
-                        if (LineageCreateTableList.indexOf(f_viewName) < LineageCreateTableList.indexOf(baseTable)) {
-                            Collections.swap(LineageCreateTableList, createViewIndex, baseTableIndex);
-                        }
-                    }
-
-                    System.out.println("AFTER swap of linkedNames (" + i + ")->" + LineageCreateTableList.toString());
-                }
-            }
-            //}
-            System.out.println("\n");
-            i = i + 1;
-        }
     }
 
     static class TablesNamesFinderExt extends TablesNamesFinder {

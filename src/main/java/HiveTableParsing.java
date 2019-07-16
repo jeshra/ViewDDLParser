@@ -34,42 +34,53 @@ public class HiveTableParsing {
 
         //List<String> statementsArray = new ArrayList<>();
         List<String> statementsArray;
-        statementsArray = Arrays.asList(SQLFileReader.fileToString("src/test/resources/test.sql").replace("`", "").split(";"));
+        statementsArray =
+                Arrays.asList(SQLFileReader.fileToString("src/test/resources/test.sql").replace("`", "").split(";"));
         //statementsArray = Arrays.asList(SQLFileReader.fileToString("src/main/resources/SampleSQL.txt").replace("`","").split(";"));
 
         TGSqlParser sqlparser = new TGSqlParser(EDbVendor.dbvhive);
 
         //Step 1: Gather all sql statements from a file.
-        for (int y = 0; y < statementsArray.size(); y++)
-            if (!statementsArray.get(y).isEmpty()) {
-                try {
-                    sqlparser.setSqltext(statementsArray.get(y));
-                    sqlparser.parse();
-                    if (sqlparser.getSqlstatements().size() != 0) mainX(sqlparser);
+        try {
+            for (int y = 0; y < statementsArray.size(); y++)
+                if (!statementsArray.get(y).isEmpty()) {
+                    try {
+                        sqlparser.setSqltext(statementsArray.get(y));
+                        sqlparser.parse();
+                        if (sqlparser.getSqlstatements().size() != 0) mainX(sqlparser);
 
-                } catch (Exception e) {
-                    if (errorDetailMap.getOrDefault(schemaName, 0) == 0) errorDetailMap.put(schemaName, 1);
+                    } catch (Exception e) {
+                        if (errorDetailMap.getOrDefault(schemaName, 0) == 0) errorDetailMap.put(schemaName, 1);
 
-                    else errorDetailMap.put(schemaName, errorDetailMap.get(schemaName) + 1);
+                        else errorDetailMap.put(schemaName, errorDetailMap.get(schemaName) + 1);
 
-                    errorStatements.append(!schemaName.isEmpty() ? "use " + schemaName + ";\n" : statementsArray.get(y) + ";\n");
-                    errorStatements.append(statementsArray.get(y)).append(";\n");
-                    //e.printStackTrace();
-                } finally {
-                    // !schemaName.isEmpty() condition include because if NO "USE" statement is found in input file
-                    //if (allObjectsMapList.size() != 0 && !schemaName.isEmpty())
-                    //  mapDatabases.put(schemaName, allObjectsMapList); //Fix: If more than one USE DB; and it puts
-                    // collected keys values if reached End of Array.
+                        errorStatements.append(!schemaName.isEmpty() ? "use " + schemaName + ";\n" : statementsArray.get(y) + ";\n");
+                        errorStatements.append(statementsArray.get(y)).append(";\n");
+                        //e.printStackTrace();
+                    }
                 }
+        } catch (Exception e) {
+
+        } finally {
+            // !schemaName.isEmpty() condition include because if NO "USE" statement is found in input file
+            if (allObjectsMapList.size() != 0 && !schemaName.isEmpty()) {
+                System.out.println("Finally block");
+                mapDatabases.put(schemaName, allObjectsMapList); //Fix: If more than one USE DB; and it puts
             }
+            // collected keys values if reached End of Array.
+        }
+
         //System.out.println(mapDatabases);
         //System.out.println(allObjectsMapList);
         //System.out.println(errorDetailMap);
         //System.out.println(errorStatements);
 
         sortInLineageOrder(stringListTreeMapTables.keySet());
-        System.exit(1);
+        System.out.println("createTableSet->" + createTableSet);
+        System.out.println("LineageCreateTableList Size:" + LineageCreateTableList.size() + "::: " + LineageCreateTableList.toString() + "\n");
         //formFinalDDL();
+        System.out.println(mapDatabases);
+
 
         //SQLFileReader.writeIntoPlainFile("outputFiles/Error.sql", errorStatements);
 
@@ -104,11 +115,15 @@ public class HiveTableParsing {
         } else if (statement instanceof THiveSwitchDatabase) {
             THiveSwitchDatabase tHiveSwitchDatabase = (THiveSwitchDatabase) statement;
             schemaName = tHiveSwitchDatabase.getDbName().getPartString().toLowerCase();
-            if (!previousSchemaName.isEmpty()) {
+            if (!previousSchemaName.isEmpty() && !schemaName.equalsIgnoreCase(previousSchemaName)) {
                 mapDatabases.put(previousSchemaName, allObjectsMapList);
-                allObjectsMapList = new LinkedHashMap<>();
             }
             previousSchemaName = schemaName;
+            if (mapDatabases.get(schemaName) == null)
+                allObjectsMapList = new LinkedHashMap<>();
+            else {
+                allObjectsMapList = new LinkedHashMap<>(mapDatabases.get(schemaName));
+            }
         }
     }
 
@@ -119,14 +134,10 @@ public class HiveTableParsing {
         for (String Table : NonLineageCreateTableList) {
             findLineage(Table, stringListTreeMapTables);
         }
-        System.out.println("LineageCreateTableList Size:" + LineageCreateTableList.size() + "::: " + LineageCreateTableList.toString() + "\n");
 
     }
 
-    //public static void findBaseTableFromView(TSelectSqlStatement viewStatement) throws JSQLParserException {
     public static void findBaseTableFromView(TSelectSqlStatement selectStatement) { //throws JSQLParserException {
-        //TSelectSqlStatement stat = (TSelectSqlStatement) viewStatement.getSubquery();
-        //List aa = Arrays.asList(selectStatement.getTables());
         TTableList tTableList = selectStatement.getTables();
 
         int i = tTableList.size() - 1;
@@ -160,9 +171,7 @@ public class HiveTableParsing {
     }
 
     public static String findCreateTableSet(TCreateTableSqlStatement tableStatement) {
-        //System.out.println("schemaName:" + schemaName);
         //findPartitionColumns(tableStatement);
-        //if (tableStatement.getTableName().getSchemaString() == null & !schemaName.isEmpty())
         if (tableStatement.getTableName().getSchemaString().isEmpty() & !schemaName.isEmpty())
             qualifiedFullTableName = schemaName + "." + tableStatement.getTableName().getTableString();
         else
@@ -211,45 +220,35 @@ public class HiveTableParsing {
         }
     }
 
-    public void formFinalDDL() {
-        /**
-         * Writing into int new SQL file.
-         */
-        /**
-         * Logic for DROP Statements in linage order
-         */
+    public static void formFinalDDL() {
         LinkedList<String> newFinalCreateObjects = new LinkedList<>();
-        ObjectClass oc;
-        Collections.sort(createTableSet);
-        for (String ct : createTableSet) {
-            oc = allObjectsMapList.get(ct);
 
-            if (newFinalCreateObjects.indexOf("USE " + oc.objDB + ";") == -1 && !oc.objDB.isEmpty())
-                newFinalCreateObjects.add("USE " + oc.objDB + ";");
-            switch (oc.objType) {
-                case "TABLE":
-                    newFinalCreateObjects.add("DROP TABLE IF EXISTS " + ct + ";");
-                    break;
-                case "VIEW":
-                    newFinalCreateObjects.add("DROP VIEW IF EXISTS " + ct + ";");
-                    break;
+        for (Map.Entry<String, Map<String, ObjectClass>> entry : mapDatabases.entrySet()) {
+            System.out.println("entry.getKey():" + entry.getKey());
+            if (newFinalCreateObjects.indexOf("USE " + entry.getKey() + ";") == -1)
+                newFinalCreateObjects.add("USE " + entry.getKey() + ";");
+
+
+            ObjectClass oc;
+            for (String ct : createTableSet) {
+                //System.out.println("ct:" + ct);
+                oc = entry.getValue().get(ct);
+                if (oc != null) {
+                    switch (oc.objType) {
+                        case "TABLE":
+                            newFinalCreateObjects.add("DROP TABLE IF EXISTS " + oc.objName + ";");
+                            break;
+                        case "VIEW":
+                            newFinalCreateObjects.add("DROP VIEW IF EXISTS " + oc.objName + ";");
+                            break;
+                    }
+                }
             }
         }
-
-
-        newFinalCreateObjects.add(newFinalCreateObjects.indexOf("USE test1;"), "I LOVE YOU");
-        System.out.println(newFinalCreateObjects);
-
-        /*oc = allObjectsMapList.get(createTablename);
-        GFmtOpt option = GFmtOptFactory.newInstance();
-        sqlparser.setSqltext(oc.objDdl);
-        sqlparser.parse();*/
-
-        //newFinalCreateObjects.add(FormatterFactory.pp(sqlparser, option) + ";\n");
-
-        SQLFileReader.AppendToFile("src/test/resources/outputFiles", newFinalCreateObjects);
-        //System.out.println(newFinalCreateObjects);
+        //System.out.println("newFinalCreateObjects:" + newFinalCreateObjects);
+        //SQLFileReader.AppendToFile("src/test/resources/outputFiles", newFinalCreateObjects);
     }
+
 }
 
 
@@ -269,7 +268,6 @@ class ObjectClass {
                 "objDB='" + objDB + '\'' +
                 "objName='" + objName + '\'' +
                 ", objType='" + objType + '\'' +
-                ", objDdl='" + objDdl + '\'' +
                 '}';
     }
 

@@ -1,5 +1,7 @@
 import gudusoft.gsqlparser.EDbVendor;
 import gudusoft.gsqlparser.TGSqlParser;
+import gudusoft.gsqlparser.nodes.TObjectName;
+import gudusoft.gsqlparser.nodes.TTable;
 import gudusoft.gsqlparser.nodes.TTableList;
 import gudusoft.gsqlparser.nodes.hive.THiveTablePartition;
 import gudusoft.gsqlparser.stmt.TCreateTableSqlStatement;
@@ -8,12 +10,14 @@ import gudusoft.gsqlparser.stmt.TSelectSqlStatement;
 import gudusoft.gsqlparser.stmt.hive.THiveSwitchDatabase;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 //import junit.framework.TestCase;
 
 
-public class HiveTableParsing {
-    private static LinkedHashMap<String, ObjectClass> allObjectsMapList = new LinkedHashMap<>();
+class HiveTableParsing implements HiveDdl {
+    private final static String lanePattern = "(.*)(_)(tl|uat|dev|sit)(\\d+)";
     private static LinkedHashMap<String, List<String>> stringListTreeMapTables = new LinkedHashMap<>();
     //private static Set<String> createTableSet = new HashSet<>();
     private static LinkedList<String> createTableSet = new LinkedList<>();
@@ -27,6 +31,9 @@ public class HiveTableParsing {
     private static Set<String> baseTablesReferedInViews = new HashSet<>();
     private static LinkedHashMap<String, Map<String, ObjectClass>> mapDatabases = new LinkedHashMap<>();
     private static LinkedHashMap<String, Integer> errorDetailMap = new LinkedHashMap<>();
+    private final static Pattern pattern = Pattern.compile(lanePattern, Pattern.CASE_INSENSITIVE);
+    private static LinkedHashMap<String, ObjectClass> allObjectsMapList1 = new LinkedHashMap<>();
+    private static LinkedHashMap<String, LinkedList<String>> stringLinkedListLinkedHashMap = new LinkedHashMap<>();
 
     public static void main(String[] args) {
         //String statementFile;
@@ -34,9 +41,8 @@ public class HiveTableParsing {
 
         //List<String> statementsArray = new ArrayList<>();
         List<String> statementsArray;
-        statementsArray =
-                Arrays.asList(SQLFileReader.fileToString("src/test/resources/test.sql").replace("`", "").split(";"));
-        //statementsArray = Arrays.asList(SQLFileReader.fileToString("src/main/resources/SampleSQL.txt").replace("`","").split(";"));
+//        statementsArray = Arrays.asList(SQLFileReader.fileToString("src/test/resources/test.sql").replace("`", "").split(";"));
+        statementsArray = Arrays.asList(SQLFileReader.fileToString("src/main/resources/SampleSQL.txt").replace("`", "").split(";"));
 
         TGSqlParser sqlparser = new TGSqlParser(EDbVendor.dbvhive);
 
@@ -62,68 +68,98 @@ public class HiveTableParsing {
         } catch (Exception e) {
 
         } finally {
-            // !schemaName.isEmpty() condition include because if NO "USE" statement is found in input file
-            if (allObjectsMapList.size() != 0 && !schemaName.isEmpty()) {
-                System.out.println("Finally block");
-                mapDatabases.put(schemaName, allObjectsMapList); //Fix: If more than one USE DB; and it puts
-            }
-            // collected keys values if reached End of Array.
+            /*//<editor-fold desc="!schemaName.isEmpty() condition include because if NO 'USE' statement is found in input file">
+            //</editor-fold>
+            if (allObjectsMapList1.size() != 0 && !schemaName.isEmpty()) {
+                mapDatabases.put(schemaName, allObjectsMapList1); //Fix: If more than one USE DB; and it puts
+            }*/
         }
-
-        //System.out.println(mapDatabases);
-        //System.out.println(allObjectsMapList);
-        //System.out.println(errorDetailMap);
-        //System.out.println(errorStatements);
-
+        {
+            //System.out.println(mapDatabases);
+            System.out.println("allObjectsMapList1:" + allObjectsMapList1);
+            //System.out.println(errorDetailMap);
+            //System.out.println(errorStatements);
+        }
         sortInLineageOrder(stringListTreeMapTables.keySet());
         System.out.println("createTableSet->" + createTableSet);
         System.out.println("LineageCreateTableList Size:" + LineageCreateTableList.size() + "::: " + LineageCreateTableList.toString() + "\n");
-        //formFinalDDL();
-        System.out.println(mapDatabases);
 
+
+        //<editor-fold desc="You can have controls with flags to process only Tables, Views, Synonmys ">
+        stringLinkedListLinkedHashMap = linageListToMap(createTableSet);
+        //</editor-fold>
+        stringLinkedListLinkedHashMap = linageListToMap(LineageCreateTableList);
+        System.out.println("stringLinkedListLinkedHashMap:" + stringLinkedListLinkedHashMap + "\n");
+        //System.out.println(mapDatabases);
+
+        //region Description
+        formFinalDDL(stringLinkedListLinkedHashMap);
+        //endregion
 
         //SQLFileReader.writeIntoPlainFile("outputFiles/Error.sql", errorStatements);
-
-
     }
 
     public static void mainX(TGSqlParser sqlparser) {
         String createName;
         statement = sqlparser.sqlstatements.get(0);
+        TObjectName o;
 
         if (statement instanceof TCreateTableSqlStatement) {
-            createName = findCreateTableSet((TCreateTableSqlStatement) statement);
-            if (createTableSet.indexOf(createName) == -1)
-                createTableSet.add(createName);
+            TCreateTableSqlStatement cTable =
+                    ((TCreateTableSqlStatement) statement);
+            createName = findCreateTableSet(cTable);
 
-            allObjectsMapList.put(createName, new ObjectClass(schemaName,
-                    ((TCreateTableSqlStatement) statement).getTableName().toString(), "TABLE",
+            //t.getTableName().getObjectToken().astext = "T8888888888";
+
+            if (createTableSet.indexOf(createName) == -1) createTableSet.add(createName);
+
+            TSelectSqlStatement select = (TSelectSqlStatement) cTable.getSubQuery();
+            System.out.println("select:" + select);
+
+            TTable t;
+            for (int i = 0; i < select.tables.size(); i++) {
+                t = select.tables.getTable(i);
+
+                Matcher m = pattern.matcher(t.toString());
+
+                if (m.find()) {
+                    System.err.println("Already suffix <" + m.group(2) + m.group(3) + m.group(4) + "> found in " +
+                            "tablename " + t);
+                } else {
+                    t.getTableName().getObjectToken().astext = t + "_tl3";
+                }
+            }
+            System.out.println(cTable);
+            System.exit(1);
+            allObjectsMapList1.put(createName, new ObjectClass(schemaName,
+                    cTable.getTableName().toString(), "TABLE",
                     statement.toString()));
 
         } else if (statement instanceof TCreateViewSqlStatement) {
-            if (((TCreateViewSqlStatement) statement).getViewName().getSchemaString().isEmpty() & !schemaName.isEmpty())
-                createName = new StringBuilder().append(schemaName).append(".").append(((TCreateViewSqlStatement) statement).getViewName()).toString();
-            else
-                createName = ((TCreateViewSqlStatement) statement).getViewName().toString();
+            TCreateViewSqlStatement cView = ((TCreateViewSqlStatement) statement);
+            if (cView.getViewName().getSchemaString().isEmpty() & !schemaName.isEmpty())
+                createName = new StringBuilder().append(schemaName).append(".").append(cView.getViewName()).toString();
+            else createName = cView.getViewName().toString();
+
             baseTablesReferedInViews = new HashSet<>();
             //  While Gathering View statements, gather its' parent tables/views
-            findBaseTableFromView(((TCreateViewSqlStatement) statement).getSubquery());
+            findBaseTableFromView(cView.getSubquery());
             stringListTreeMapTables.put(createName.toLowerCase(), new LinkedList<>(baseTablesReferedInViews));
 
-            allObjectsMapList.put(createName, new ObjectClass(schemaName, ((TCreateViewSqlStatement) statement).getViewName().toString(), "VIEW", statement.toString()));
+            allObjectsMapList1.put(createName, new ObjectClass(schemaName, cView.getViewName().toString(), "VIEW", statement.toString()));
 
         } else if (statement instanceof THiveSwitchDatabase) {
             THiveSwitchDatabase tHiveSwitchDatabase = (THiveSwitchDatabase) statement;
             schemaName = tHiveSwitchDatabase.getDbName().getPartString().toLowerCase();
             if (!previousSchemaName.isEmpty() && !schemaName.equalsIgnoreCase(previousSchemaName)) {
-                mapDatabases.put(previousSchemaName, allObjectsMapList);
+                mapDatabases.put(previousSchemaName, allObjectsMapList1);
             }
-            previousSchemaName = schemaName;
+            /*previousSchemaName = schemaName;
             if (mapDatabases.get(schemaName) == null)
-                allObjectsMapList = new LinkedHashMap<>();
+                allObjectsMapList1 = new LinkedHashMap<>();
             else {
-                allObjectsMapList = new LinkedHashMap<>(mapDatabases.get(schemaName));
-            }
+                allObjectsMapList1 = new LinkedHashMap<>(mapDatabases.get(schemaName));
+            }*/
         }
     }
 
@@ -139,11 +175,8 @@ public class HiveTableParsing {
 
     public static void findBaseTableFromView(TSelectSqlStatement selectStatement) { //throws JSQLParserException {
         TTableList tTableList = selectStatement.getTables();
-
         int i = tTableList.size() - 1;
         while (i >= 0) {
-            //String tt1 = tTableList.getTable(i).toString();
-            //Boolean bb1 = tTableList.getTable(i).isBaseTable();
             if (tTableList.getTable(i).isBaseTable()) {
                 //String tmp1 = tTableList.getTable(i).getPrefixSchema().toString();
                 //System.out.println("tmp1:" + tmp1);
@@ -152,21 +185,13 @@ public class HiveTableParsing {
                     qualifiedFullTableName = schemaName + "." + tTableList.getTable(i);
                 else
                     qualifiedFullTableName = tTableList.getTable(i).toString();
-
-                // System.out.println("1-qualifiedFullTableName:" + qualifiedFullTableName);
-                //System.out.println("1-baseTablesReferedInViews:" + baseTablesReferedInViews);
-                //if (baseTablesReferedInViews.indexOf(qualifiedFullTableName) == -1)
                 if (!baseTablesReferedInViews.contains(qualifiedFullTableName))
                     baseTablesReferedInViews.add(qualifiedFullTableName.toLowerCase());
-
-                // System.out.println("2-baseTablesReferedInViews:" + baseTablesReferedInViews);
             } else {
                 findBaseTableFromView(tTableList.getTable(i).getSubquery());
             }
-
             i--;
         }
-
         //return baseTablesReferedInViews;
     }
 
@@ -212,7 +237,7 @@ public class HiveTableParsing {
             List<String> baseTableList = tablesMap.get(Table);
 
             for (String baseTable : baseTableList) {
-                if (Table.equalsIgnoreCase(baseTable)) System.out.println("DEADLOCK::" + baseTable);
+                if (Table.equalsIgnoreCase(baseTable)) System.err.println("DEADLOCK::" + baseTable);
                 else
                     findLineage(baseTable, tablesMap);
             }
@@ -220,19 +245,17 @@ public class HiveTableParsing {
         }
     }
 
-    public static void formFinalDDL() {
+    public static void formFinalDDL(LinkedHashMap stringLinkedList) {
         LinkedList<String> newFinalCreateObjects = new LinkedList<>();
+        ObjectClass oc;
+        //for (Map.Entry<String, Map<String, ObjectClass>> entry : mapDatabases.entrySet()) {
+        for (Map.Entry<String, LinkedList<String>> entry : stringLinkedListLinkedHashMap.entrySet()) {
+            //if (newFinalCreateObjects.indexOf("USE " + entry.getKey() + ";") == -1)
+            newFinalCreateObjects.add("USE " + entry.getKey() + ";\n");
 
-        for (Map.Entry<String, Map<String, ObjectClass>> entry : mapDatabases.entrySet()) {
-            System.out.println("entry.getKey():" + entry.getKey());
-            if (newFinalCreateObjects.indexOf("USE " + entry.getKey() + ";") == -1)
-                newFinalCreateObjects.add("USE " + entry.getKey() + ";");
-
-
-            ObjectClass oc;
-            for (String ct : createTableSet) {
-                //System.out.println("ct:" + ct);
-                oc = entry.getValue().get(ct);
+            //Process each elements in LinkedList
+            for (String o : entry.getValue()) {
+                oc = allObjectsMapList1.get(o);
                 if (oc != null) {
                     switch (oc.objType) {
                         case "TABLE":
@@ -244,11 +267,68 @@ public class HiveTableParsing {
                     }
                 }
             }
+            newFinalCreateObjects.add("\n");
+            for (String o : entry.getValue()) {
+                oc = allObjectsMapList1.get(o);
+                if (oc != null) {
+                    newFinalCreateObjects.add(oc.objDdl + ";\n");
+                }
+            }
         }
         //System.out.println("newFinalCreateObjects:" + newFinalCreateObjects);
-        //SQLFileReader.AppendToFile("src/test/resources/outputFiles", newFinalCreateObjects);
+        SQLFileReader.AppendToFile("src/test/resources/outputFiles", newFinalCreateObjects);
     }
 
+    public static LinkedHashMap<String, LinkedList<String>> linageListToMap(LinkedList<String> linageList) {
+
+        String[] dbName;
+        LinkedList<String> newLinkedList = null;
+
+        if (linageList.size() != 0) {
+            for (String name : linageList) {
+                dbName = name.split("\\.");
+
+                if (dbName.length == 2) {
+                    if (stringLinkedListLinkedHashMap.get(dbName[0]) == null) {
+                        newLinkedList = new LinkedList<>();
+                    } else {
+                        newLinkedList = new LinkedList<>(stringLinkedListLinkedHashMap.get(dbName[0]));
+                    }
+                    newLinkedList.add(name);
+                    stringLinkedListLinkedHashMap.put(dbName[0], newLinkedList);
+                }
+            }
+        }
+        return stringLinkedListLinkedHashMap;
+    }
+
+    @Override
+    public void convertLane(TTable tt, String newSuffix) {
+
+        final Matcher m = pattern.matcher(tt.toString());
+
+        if (m.find()) {
+            System.err.println("Already suffix <" + m.group(2) + m.group(3) + m.group(4) + "> found in " +
+                    "tablename " + tt);
+        } else {
+            tt.getTableName().getObjectToken().astext = tt + newSuffix;
+        }
+    }
+
+    @Override
+    public void extractTablenamesFromCreateView(String var) {
+
+    }
+
+    @Override
+    public void extractTablenamesFromCreateTable(String var) {
+
+    }
+
+    @Override
+    public void extractTablenamesFromSQL(String var) {
+
+    }
 }
 
 

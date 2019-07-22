@@ -16,33 +16,29 @@ import java.util.regex.Pattern;
 //import junit.framework.TestCase;
 
 
-class HiveTableParsing implements HiveDdl {
-    private final static String lanePattern = "(.*)(_)(tl|uat|dev|sit)(\\d+)";
-    private static LinkedHashMap<String, List<String>> stringListTreeMapTables = new LinkedHashMap<>();
-    //private static Set<String> createTableSet = new HashSet<>();
-    private static LinkedList<String> createTableSet = new LinkedList<>();
-    private static String schemaName = "", qualifiedFullTableName = "", previousSchemaName = "";
-    private static LinkedList<String> LineageCreateTableList = new LinkedList<>();
-    private static LinkedList<String> NonLineageCreateTableList = new LinkedList<>();
-    private static gudusoft.gsqlparser.TCustomSqlStatement statement;
-    private static StringBuffer finalStatements = new StringBuffer();
-    private static StringBuffer errorStatements = new StringBuffer();
-    private static StringBuffer outStatements = new StringBuffer();
-    private static Set<String> baseTablesReferedInViews = new HashSet<>();
-    private static LinkedHashMap<String, Map<String, ObjectClass>> mapDatabases = new LinkedHashMap<>();
-    private static LinkedHashMap<String, Integer> errorDetailMap = new LinkedHashMap<>();
-    private final static Pattern pattern = Pattern.compile(lanePattern, Pattern.CASE_INSENSITIVE);
-    private static LinkedHashMap<String, ObjectClass> allObjectsMapList1 = new LinkedHashMap<>();
-    private static LinkedHashMap<String, LinkedList<String>> stringLinkedListLinkedHashMap = new LinkedHashMap<>();
+public class HiveTableParsing implements HiveDdl {
+    private final String lanePattern = "(.*)(_)(tl|uat|dev|sit)(\\d+)";
+    private final Pattern pattern = Pattern.compile(lanePattern, Pattern.CASE_INSENSITIVE);
+    private LinkedHashMap<String, List<String>> stringListTreeMapTables = new LinkedHashMap<>();
+    //private  Set<String> createTableSet = new HashSet<>();
+    private LinkedList<String> createTableSet = new LinkedList<>();
+    private String schemaName = "", qualifiedFullTableName = "", previousSchemaName = "";
+    private LinkedList<String> LineageCreateTableList = new LinkedList<>();
+    private LinkedList<String> NonLineageCreateTableList = new LinkedList<>();
+    private gudusoft.gsqlparser.TCustomSqlStatement statement;
+    private StringBuffer finalStatements = new StringBuffer();
+    private StringBuffer errorStatements = new StringBuffer();
+    private StringBuffer outStatements = new StringBuffer();
+    private Set<String> baseTablesReferedInViews = new HashSet<>();
+    private LinkedHashMap<String, Map<String, ObjectClass>> mapDatabases = new LinkedHashMap<>();
+    private LinkedHashMap<String, Integer> errorDetailMap = new LinkedHashMap<>();
+    private LinkedHashMap<String, ObjectClass> allObjectsMapList1 = new LinkedHashMap<>();
+    private LinkedHashMap<String, LinkedList<String>> stringLinkedListLinkedHashMap = new LinkedHashMap<>();
 
-    public static void main(String[] args) {
-        //String statementFile;
-        //statementFile = SQLFileReader.fileToString("src/main/resources/inputFiles/vwds_wcredit_ads_reference.ddl").replace("`", "");
-
-        //List<String> statementsArray = new ArrayList<>();
+    //public void mainX(String[] args) {
+    public void mainX(String fileName) {
         List<String> statementsArray;
-//        statementsArray = Arrays.asList(SQLFileReader.fileToString("src/test/resources/test.sql").replace("`", "").split(";"));
-        statementsArray = Arrays.asList(SQLFileReader.fileToString("src/main/resources/SampleSQL.txt").replace("`", "").split(";"));
+        statementsArray = Arrays.asList(SQLFileReader.fileToString(fileName).replace("`", "").split(";"));
 
         TGSqlParser sqlparser = new TGSqlParser(EDbVendor.dbvhive);
 
@@ -53,7 +49,7 @@ class HiveTableParsing implements HiveDdl {
                     try {
                         sqlparser.setSqltext(statementsArray.get(y));
                         sqlparser.parse();
-                        if (sqlparser.getSqlstatements().size() != 0) mainX(sqlparser);
+                        if (sqlparser.getSqlstatements().size() != 0) mainY(sqlparser);
 
                     } catch (Exception e) {
                         if (errorDetailMap.getOrDefault(schemaName, 0) == 0) errorDetailMap.put(schemaName, 1);
@@ -62,7 +58,7 @@ class HiveTableParsing implements HiveDdl {
 
                         errorStatements.append(!schemaName.isEmpty() ? "use " + schemaName + ";\n" : statementsArray.get(y) + ";\n");
                         errorStatements.append(statementsArray.get(y)).append(";\n");
-                        //e.printStackTrace();
+                        e.printStackTrace();
                     }
                 }
         } catch (Exception e) {
@@ -99,7 +95,7 @@ class HiveTableParsing implements HiveDdl {
         //SQLFileReader.writeIntoPlainFile("outputFiles/Error.sql", errorStatements);
     }
 
-    public static void mainX(TGSqlParser sqlparser) {
+    public void mainY(TGSqlParser sqlparser) {
         String createName;
         statement = sqlparser.sqlstatements.get(0);
         TObjectName o;
@@ -109,27 +105,28 @@ class HiveTableParsing implements HiveDdl {
                     ((TCreateTableSqlStatement) statement);
             createName = findCreateTableSet(cTable);
 
-            //t.getTableName().getObjectToken().astext = "T8888888888";
-
             if (createTableSet.indexOf(createName) == -1) createTableSet.add(createName);
 
             TSelectSqlStatement select = (TSelectSqlStatement) cTable.getSubQuery();
-            System.out.println("select:" + select);
+            System.out.println("select = " + select);
+
 
             TTable t;
             for (int i = 0; i < select.tables.size(); i++) {
                 t = select.tables.getTable(i);
+                System.out.println("t = " + t);
 
-                Matcher m = pattern.matcher(t.toString());
+                convertLane(t, "tl3");
+                /*Matcher m = pattern.matcher(t.toString());
 
                 if (m.find()) {
                     System.err.println("Already suffix <" + m.group(2) + m.group(3) + m.group(4) + "> found in " +
                             "tablename " + t);
                 } else {
                     t.getTableName().getObjectToken().astext = t + "_tl3";
-                }
+                }*/
             }
-            System.out.println(cTable);
+            System.out.println("cTable = " + cTable);
             System.exit(1);
             allObjectsMapList1.put(createName, new ObjectClass(schemaName,
                     cTable.getTableName().toString(), "TABLE",
@@ -163,7 +160,7 @@ class HiveTableParsing implements HiveDdl {
         }
     }
 
-    public static void sortInLineageOrder(Set createObjectNames) {
+    public void sortInLineageOrder(Set createObjectNames) {
         System.out.println("stringListTreeMapTables->" + stringListTreeMapTables + "\n");
         NonLineageCreateTableList.addAll(createObjectNames);
         System.out.println("NonLineageCreateTableList::" + NonLineageCreateTableList + "\n");
@@ -173,7 +170,7 @@ class HiveTableParsing implements HiveDdl {
 
     }
 
-    public static void findBaseTableFromView(TSelectSqlStatement selectStatement) { //throws JSQLParserException {
+    public void findBaseTableFromView(TSelectSqlStatement selectStatement) { //throws JSQLParserException {
         TTableList tTableList = selectStatement.getTables();
         int i = tTableList.size() - 1;
         while (i >= 0) {
@@ -195,8 +192,9 @@ class HiveTableParsing implements HiveDdl {
         //return baseTablesReferedInViews;
     }
 
-    public static String findCreateTableSet(TCreateTableSqlStatement tableStatement) {
+    public String findCreateTableSet(TCreateTableSqlStatement tableStatement) {
         //findPartitionColumns(tableStatement);
+        System.out.println("tableStatement.getTableName() = " + tableStatement.getTableKinds());
         if (tableStatement.getTableName().getSchemaString().isEmpty() & !schemaName.isEmpty())
             qualifiedFullTableName = schemaName + "." + tableStatement.getTableName().getTableString();
         else
@@ -205,7 +203,7 @@ class HiveTableParsing implements HiveDdl {
         return qualifiedFullTableName.toLowerCase();
     }
 
-    public static void findPartitionColumns(TCreateTableSqlStatement tableStatement) {
+    public void findPartitionColumns(TCreateTableSqlStatement tableStatement) {
         THiveTablePartition tp = tableStatement.getHiveTablePartition();
         //assertTrue(tp.getColumnDefList().size() == 2);
         //System.out.println("tp.getColumnDefList().size():" + tp.getColumnDefList().size());
@@ -229,7 +227,7 @@ class HiveTableParsing implements HiveDdl {
      * @param Table
      * @param tablesMap
      */
-    public static void findLineage(String Table, Map<String, List<String>> tablesMap) {
+    public void findLineage(String Table, Map<String, List<String>> tablesMap) {
         /**
          * Checks first whether the child base table is also has a CREATE TABLE statement
          */
@@ -245,7 +243,7 @@ class HiveTableParsing implements HiveDdl {
         }
     }
 
-    public static void formFinalDDL(LinkedHashMap stringLinkedList) {
+    public void formFinalDDL(LinkedHashMap stringLinkedList) {
         LinkedList<String> newFinalCreateObjects = new LinkedList<>();
         ObjectClass oc;
         //for (Map.Entry<String, Map<String, ObjectClass>> entry : mapDatabases.entrySet()) {
@@ -279,7 +277,7 @@ class HiveTableParsing implements HiveDdl {
         SQLFileReader.AppendToFile("src/test/resources/outputFiles", newFinalCreateObjects);
     }
 
-    public static LinkedHashMap<String, LinkedList<String>> linageListToMap(LinkedList<String> linageList) {
+    public LinkedHashMap<String, LinkedList<String>> linageListToMap(LinkedList<String> linageList) {
 
         String[] dbName;
         LinkedList<String> newLinkedList = null;
@@ -308,11 +306,16 @@ class HiveTableParsing implements HiveDdl {
         final Matcher m = pattern.matcher(tt.toString());
 
         if (m.find()) {
-            System.err.println("Already suffix <" + m.group(2) + m.group(3) + m.group(4) + "> found in " +
-                    "tablename " + tt);
+            System.err.println("Already suffix <" + m.group(2) + m.group(3) + m.group(4) + "> found in tablename " + tt);
         } else {
-            tt.getTableName().getObjectToken().astext = tt + newSuffix;
+            tt.getTableName().getObjectToken().astext = tt + "_" + newSuffix;
         }
+        /*if (m.find()) {
+                    System.err.println("Already suffix <" + m.group(2) + m.group(3) + m.group(4) + "> found in " +
+                            "tablename " + t);
+                } else {
+                    t.getTableName().getObjectToken().astext = t + "_tl3";
+                }*/
     }
 
     @Override
